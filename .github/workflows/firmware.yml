@@ -1,0 +1,52 @@
+name: Build firmware (tinySA Ultra+ ZS407, STM32F303)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Fetch upstream tags (for the version string)
+        run: git fetch --tags --force https://github.com/erikkaashoek/tinySA.git || true
+
+      # Same compiler as the official tinySA Ultra builds (GCC 11.3.1 20220712)
+      - name: Install Arm GNU Toolchain 11.3.Rel1
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '11.3.Rel1'
+
+      - name: Build
+        run: |
+          arm-none-eabi-gcc --version
+          make TARGET=F303 -j"$(nproc)"
+
+      - name: Size report
+        run: |
+          arm-none-eabi-size build/tinySA4.elf
+          ls -l build/tinySA4.bin
+          echo '### Firmware size' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          arm-none-eabi-size build/tinySA4.elf >> "$GITHUB_STEP_SUMMARY"
+          ls -l build/tinySA4.bin >> "$GITHUB_STEP_SUMMARY"
+          cat version.txt >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: tinySA4-zs407-firmware
+          path: |
+            build/tinySA4.bin
+            build/tinySA4.hex
+            build/tinySA4.elf
+            build/tinySA4.map
+          if-no-files-found: error
