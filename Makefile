@@ -312,26 +312,6 @@ RULESPATH = $(CHIBIOS)/os/common/startup/ARMCMx/compilers/GCC
 include $(RULESPATH)/rules.mk
 #include $(CHIBIOS)/memory.mk
 
-##############################################################################
-# tinySA Ultra / Ultra+ (ZS405/ZS406/ZS407, STM32F303, Cortex-M4F) speed build
-#
-# The measurement loop (sa_core.c: perform(), sweep(), the level corrections)
-# and the trace and cell rendering (plot.c) are calculation code that runs for
-# every measured point and every screen update. They are compiled with -O2,
-# the rest of the firmware (drivers, USB, SD card, UI) keeps the -Og setting so
-# nothing changes in code that talks to hardware with implicit timing.
-#  -fno-inline-functions       keeps the stack use of the threads as it was
-#  -fno-strict-aliasing, -fwrapv, -fno-aggressive-loop-optimizations
-#                              keep the language rules the code was written
-#                              and tested with at -Og
-# Build with HOT_OPT= to get the original optimization for all files.
-ifeq ($(TARGET),F303)
-HOT_SRC ?= sa_core.c plot.c
-HOT_OPT ?= -O2 -fno-inline-functions -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations
-HOT_OBJS = $(addprefix build/obj/, $(HOT_SRC:.c=.o))
-$(HOT_OBJS): TOPT += $(HOT_OPT)
-endif
-
 $(OBJS): $(VERSION_FILE)
 
 

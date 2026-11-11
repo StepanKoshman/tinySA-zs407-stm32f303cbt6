@@ -24,32 +24,32 @@ jobs:
         with:
           release: '11.3.Rel1'
 
-      - name: DIAG baseline (-Og everywhere)
+      - name: DIAG baseline (upstream main)
         run: |
-          make TARGET=F303 -j"$(nproc)" HOT_OPT= > base.log 2>&1 || (tail -30 base.log; exit 1)
+          git worktree add /tmp/base origin/main
+          rmdir /tmp/base/ChibiOS && ln -s "$PWD/ChibiOS" /tmp/base/ChibiOS
+          make -C /tmp/base TARGET=F303 -j"$(nproc)" > base.log 2>&1 || (tail -30 base.log; exit 1)
           grep -E "flash0|ram0|ram4" base.log
-          arm-none-eabi-size build/obj/sa_core.o build/obj/plot.o
-          mkdir -p /tmp/base && cp build/obj/*.su /tmp/base/
-          cat version.txt
+          arm-none-eabi-size /tmp/base/build/obj/main.o /tmp/base/build/obj/plot.o
 
       - name: DIAG hot build
         run: |
-          rm -f build/obj/sa_core.o build/obj/plot.o build/tinySA4.*
-          make TARGET=F303 USE_VERBOSE_COMPILE=yes HOT_OPT="-O2 -fno-inline-functions -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations -Wdouble-promotion" > hot.log 2>&1 || (tail -60 hot.log; exit 1)
-          grep -E "gcc -c .*(sa_core|plot)\.c" hot.log | sed -E 's/-I[^ ]+ //g' | cut -c1-600
+          make TARGET=F303 -j"$(nproc)" USE_COPT=-Wdouble-promotion > hot.log 2>&1 || (grep -E "error|Error" -B3 -A3 hot.log | head -80; exit 1)
           grep -E "flash0|ram0|ram4" hot.log
-          arm-none-eabi-size build/obj/sa_core.o build/obj/plot.o
+          arm-none-eabi-size build/obj/main.o build/obj/plot.o
           echo "== double promotion lines"
-          grep -E "^(sa_core|plot)\.c:[0-9]+:[0-9]+: warning: implicit conversion" hot.log | cut -d: -f1,2 | sort -t: -k1,1 -k2,2n -u | tr '\n' ' '
-          echo
-          echo "== other warnings in hot files"
-          grep -E "^(sa_core|plot)\.c:[0-9]+:[0-9]+: warning" hot.log | grep -v "implicit conversion" | cut -c1-200 | head -40
-          echo "== stack usage base vs hot (top)"
-          for f in sa_core plot; do
-            echo "-- $f base"; sort -t$'\t' -k2 -n -r /tmp/base/$f.su | head -14 | cut -c1-90
-            echo "-- $f hot";  sort -t$'\t' -k2 -n -r build/obj/$f.su | head -14 | cut -c1-90
+          for f in sa_core plot main waterfall; do
+            echo "-- $f.c"
+            grep -E "^$f\.c:[0-9]+:[0-9]+: warning: implicit conversion from 'float' to 'double'" hot.log | cut -d: -f2 | sort -n -u | tr '\n' ' '
+            echo
           done
-          rm -f build/obj/sa_core.o build/obj/plot.o build/tinySA4.*
+          echo "== stack usage base vs hot"
+          for f in main plot; do
+            echo "-- $f base"; sort -t$'\t' -k2 -n -r /tmp/base/build/obj/$f.su | head -12 | cut -c1-80
+            echo "-- $f hot";  sort -t$'\t' -k2 -n -r build/obj/$f.su | head -12 | cut -c1-80
+          done
+          echo "-- perform/sweep"; grep -E ":(perform|sweep|draw_cell|draw_all|plot_into_index)\s" /tmp/base/build/obj/*.su build/obj/*.su | cut -c1-120
+          make TARGET=F303 clean > /dev/null 2>&1; rm -rf build
 
       - name: Build
         run: |

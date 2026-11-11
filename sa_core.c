@@ -3651,6 +3651,11 @@ bool depth_error = false;
 #endif
 
 
+// The measurement loop: perform() runs for every measured (sub)step, sweep() for every point.
+// Compile both for speed, the rest of the firmware is compiled for size.
+#pragma GCC push_options
+#pragma GCC optimize ("O2")
+
 pureRSSI_t perform(bool break_on_operation, int i, freq_t f, int tracking)     // Measure the RSSI for one frequency, used from sweep and other measurement routines. Must do all HW setup
 {
   int modulation_delay = 0;
@@ -5574,13 +5579,13 @@ static volatile int dummy;
             trace_data[i] = RSSI_calc;
           } else {
             if (age[i] > setting.decay)
-              trace_data[i] -= 0.5;
+              trace_data[i] -= 0.5f;
             else
               age[i] += 1;
           }
           break;
-        case AV_4:  trace_data[i] = (trace_data[i]*3.0 + RSSI_calc) / 4.0; break;
-        case AV_16: trace_data[i] = (trace_data[i]*15.0 + RSSI_calc) / 16.0; break;
+        case AV_4:  trace_data[i] = (trace_data[i]*3.0f + RSSI_calc) / 4.0f; break;
+        case AV_16: trace_data[i] = (trace_data[i]*15.0f + RSSI_calc) / 16.0f; break;
         case AV_100:
 #ifdef TINYSA4
           if (linear_averaging)
@@ -5591,8 +5596,9 @@ static volatile int dummy;
           trace_data[i] = to_dBm((value(trace_data[i])*(setting.scan_after_dirty[t]-1) + value(RSSI_calc)) / setting.scan_after_dirty[t] );
           setting.unit = old_unit;
 #else
-          float v = (expf(trace_data[i]*(logf(10.0)/10.0)) * (setting.scan_after_dirty[t]-1) + expf(RSSI_calc * (logf(10.0)/10.0))) / setting.scan_after_dirty[t];
-          trace_data[i] = logf(v)*(10.0/logf(10.0));
+          // ln(10)/10 and 10/ln(10) as float constants: keeps this in the FPU, no software double math
+          float v = (expf(trace_data[i]*0.2302585093f) * (setting.scan_after_dirty[t]-1) + expf(RSSI_calc * 0.2302585093f)) / setting.scan_after_dirty[t];
+          trace_data[i] = logf(v)*4.342944819f;
 #endif
         }
           else
@@ -5744,7 +5750,7 @@ static volatile int dummy;
       float *trace_data = measured[t];
       for (int i=0;i<sweep_points; i++) {
         add_to_peak_finding(trace_data, i);
-        if ( trace_data[i] > -174.0 && temp_min_level > trace_data[i])   // Remember minimum
+        if ( trace_data[i] > -174.0f && temp_min_level > trace_data[i])   // Remember minimum
           temp_min_level = trace_data[i];
       }
       if (cur_max == 0) {                           // Always at least one maximum per trace
@@ -6186,6 +6192,7 @@ static volatile int dummy;
   }
   return true;
 }
+#pragma GCC pop_options                 // end of the measurement loop compiled for speed
 
 //------------------------------- SEARCH ---------------------------------------------
 
