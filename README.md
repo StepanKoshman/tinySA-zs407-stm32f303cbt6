@@ -10,6 +10,29 @@ tinySA - tiny Spectrum Analyzer
 <img src="/doc/tinySA.jpg" width="480px">
 </div>
 
+# This fork: tinySA Ultra+ ZS407 (STM32F303CBT6) speed build
+
+Branch `zs407-speed` of this fork is the tinySA firmware built for speed on the STM32F303 (Cortex-M4F) of the tinySA Ultra / Ultra+ (ZS405, ZS406, ZS407). All functions of the original firmware are kept.
+
+**Get the firmware:** every push is built by GitHub Actions with the same compiler as the official firmware (Arm GNU Toolchain 11.3.Rel1). Open *Actions*, select the latest run of *Build firmware* and download the artifact `tinySA4-zs407-firmware`. It contains `tinySA4.bin` (SD card update or `dfu-util`), `.hex`, `.elf` and `.map`.
+
+**What is changed compared to the original firmware**
+
+* The measurement loop (`perform()` and `sweep()` in `sa_core.c`) and the trace and cell rendering (`plot.c`) are compiled with `-O2` instead of `-Os`.
+* Trace averaging (AVER 4, AVER 16, linear averaging) and the search for the trace minimum use the single precision FPU of the Cortex-M4F. The original code did these per point in software double precision.
+* Nothing is changed in the programming of the PLL and the Si4468, in the settle delays, in the level calibration or in the layout of the stored configuration. Settings, calibration and presets are kept when this firmware is installed.
+
+**What limits the sweep speed**
+
+For every measured step the firmware programs the first LO PLL, waits for the PLL and the RSSI detector to settle (150 us at an RBW of 300 kHz and more, up to 18.7 ms at an RBW of 300 Hz) and then reads the RSSI from the Si4468. The largest RBW is 850 kHz, so a wide span needs many steps per displayed point. These times belong to the RF hardware. The MCU spends most of a sweep waiting for it, which is why faster code only gains a few percent.
+
+Settings that make the sweep faster, at the cost of level accuracy:
+
+* `DISPLAY` > `SWEEP ACCURACY` > `FAST`: half the number of steps on wide spans.
+* `DISPLAY` > `SWEEP ACCURACY` > `WSPEEDUP` (2..20): divides the settle delay. Check the level of a known signal after changing it.
+* `DISPLAY` > `SWEEP POINTS`: fewer points, proportionally faster.
+* A larger RBW when it is set manually.
+
 # About
 
 tinySA is very tiny handheld Spectrum Analyzer (SA). It is
