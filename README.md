@@ -24,7 +24,7 @@ Branch `zs407-speed` of this fork is the tinySA firmware built for speed on the 
 
 **What limits the sweep speed**
 
-For every measured step the firmware programs the first LO PLL, waits for the PLL and the RSSI detector to settle (150 us at an RBW of 300 kHz and more, up to 18.7 ms at an RBW of 300 Hz) and then reads the RSSI from the Si4468. The largest RBW is 850 kHz, so a wide span needs many steps per displayed point. These times belong to the RF hardware. The MCU spends most of a sweep waiting for it, which is why faster code only gains a few percent.
+For every measured step the firmware programs the first LO PLL, waits for the PLL and the RSSI detector to settle (150 us at an RBW of 300 kHz and more, up to 18.7 ms at an RBW of 300 Hz) and then reads the RSSI from the Si4468. The largest RBW is 850 kHz, so a wide span needs many steps per displayed point. These times belong to the RF hardware. The MCU spends most of a sweep waiting for it, so faster code can only gain a little: the estimate from the timing constants in the source is a few percent. The gain is not measured on a device yet, compare the sweep time shown on the screen with the original firmware.
 
 Settings that make the sweep faster, at the cost of level accuracy:
 
