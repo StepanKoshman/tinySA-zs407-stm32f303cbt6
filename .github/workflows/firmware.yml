@@ -16,13 +16,40 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch upstream tags (for the version string)
-        run: git fetch --tags --force https://github.com/erikkaashoek/tinySA.git || true
+        run: git fetch --tags --force --no-recurse-submodules https://github.com/erikkaashoek/tinySA.git || true
 
       # Same compiler as the official tinySA Ultra builds (GCC 11.3.1 20220712)
       - name: Install Arm GNU Toolchain 11.3.Rel1
         uses: carlosperate/arm-none-eabi-gcc-action@v1
         with:
           release: '11.3.Rel1'
+
+      - name: DIAG baseline (-Og everywhere)
+        run: |
+          make TARGET=F303 -j"$(nproc)" HOT_OPT= > base.log 2>&1 || (tail -30 base.log; exit 1)
+          grep -E "flash0|ram0|ram4" base.log
+          arm-none-eabi-size build/obj/sa_core.o build/obj/plot.o
+          mkdir -p /tmp/base && cp build/obj/*.su /tmp/base/
+          cat version.txt
+
+      - name: DIAG hot build
+        run: |
+          rm -f build/obj/sa_core.o build/obj/plot.o build/tinySA4.*
+          make TARGET=F303 USE_VERBOSE_COMPILE=yes HOT_OPT="-O2 -fno-inline-functions -fno-strict-aliasing -fwrapv -fno-aggressive-loop-optimizations -Wdouble-promotion" > hot.log 2>&1 || (tail -60 hot.log; exit 1)
+          grep -E "gcc -c .*(sa_core|plot)\.c" hot.log | sed -E 's/-I[^ ]+ //g' | cut -c1-600
+          grep -E "flash0|ram0|ram4" hot.log
+          arm-none-eabi-size build/obj/sa_core.o build/obj/plot.o
+          echo "== double promotion lines"
+          grep -E "^(sa_core|plot)\.c:[0-9]+:[0-9]+: warning: implicit conversion" hot.log | cut -d: -f1,2 | sort -t: -k1,1 -k2,2n -u | tr '\n' ' '
+          echo
+          echo "== other warnings in hot files"
+          grep -E "^(sa_core|plot)\.c:[0-9]+:[0-9]+: warning" hot.log | grep -v "implicit conversion" | cut -c1-200 | head -40
+          echo "== stack usage base vs hot (top)"
+          for f in sa_core plot; do
+            echo "-- $f base"; sort -t$'\t' -k2 -n -r /tmp/base/$f.su | head -14 | cut -c1-90
+            echo "-- $f hot";  sort -t$'\t' -k2 -n -r build/obj/$f.su | head -14 | cut -c1-90
+          done
+          rm -f build/obj/sa_core.o build/obj/plot.o build/tinySA4.*
 
       - name: Build
         run: |
